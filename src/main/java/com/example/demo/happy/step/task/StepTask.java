@@ -27,36 +27,45 @@ import java.util.*;
 @EnableScheduling
 @Slf4j
 public class StepTask {
-    private static final String TEMP_FILE_PATH = "log/temp.txt";
     private static int reCount = 2;
 
     @Value("${step.login.account}")
     private String account;
     @Value("${step.login.password}")
     private String password;
+    @Value("${token.file.name}")
+    private String tokenFilePath;
+    @Value("${step.login.minStep}")
+    private Integer minStep;
 
-    @Scheduled(cron = "0 0 18 * * ?")
-//    @Scheduled(cron = "0 13 23 * * ?")
+    //    @Scheduled(cron = "0 0 18 * * ?")
+    @Scheduled(cron = "0 0/30 8-20 * * ?")
+//    @Scheduled(cron = "0 * 13 * * ?")
     public void task() throws InterruptedException {
-        int nextInt = new Random().nextInt(10);
+        int nextInt = 0;
         log.info("【准备同步步数】等待{}分钟------------------------------------", nextInt);
         Thread.sleep(1000 * 60 * nextInt);
-
-        int step = new Random().nextInt(10000) + 20000;
+        int step = getStep();
         Map<String, String> tokenMap = readToken();
-        String accessToken = tokenMap.get("accessToken");
-        String userId = tokenMap.get("userId");
-        if (isBlank(accessToken) || isBlank(userId)) {
+        if (tokenMap == null || tokenMap.size() < 2 || isBlank(tokenMap.get("accessToken")) || isBlank(tokenMap.get("userId"))) {
             reUpdate(step);
             return;
         }
-        JSONObject updateJson = JSONObject.parseObject(update(accessToken, userId, step));
+        JSONObject updateJson = JSONObject.parseObject(update(tokenMap.get("accessToken"), tokenMap.get("userId"), step));
         if (isSuccess(updateJson)) {
             log.info("==============【同步步数成功】");
         } else {
             log.info("==============【同步步数失败】\n尝试重新登录并同步。。。。。");
             reUpdate(step);
         }
+    }
+
+    private Integer getStep() {
+        Calendar cal = Calendar.getInstance();
+        int hour = cal.get(Calendar.HOUR_OF_DAY) - 7;
+        int minute = cal.get(Calendar.MINUTE) / 30;
+        int addStep = hour * 1000 + minute * 500;
+        return new Random().nextInt(500) + addStep + (minStep == null ? 20000 : minStep);
     }
 
     private boolean isBlank(String str) {
@@ -66,8 +75,9 @@ public class StepTask {
     private void reUpdate(int step) {
         JSONObject loginJson = JSONObject.parseObject(login());
         if (isSuccess(loginJson)) {
-            String accessToken = loginJson.getString("accessToken");
-            String userId = loginJson.getString("userId");
+            JSONObject dataJson = loginJson.getJSONObject("data");
+            String accessToken = dataJson.getString("accessToken");
+            String userId = dataJson.getString("userId");
             log.info("==============【登录成功】====================");
             writeToken(accessToken, userId);
             log.info("【登录成功】写入：accessToken={}, userId={}", accessToken, userId);
@@ -76,12 +86,13 @@ public class StepTask {
                 log.info("==============【同步步数成功】result={}", updateJson);
                 return;
             } else {
-                log.info("==============【同步步数失败】result={}\n尝试重新登录并同步。。。。。", updateJson);
+                log.info("==============【同步步数失败】result={}", updateJson);
             }
         } else {
             log.info("==============【重新登录失败】---------");
         }
         if (--reCount > 0) {
+            log.info("==============【同步步数失败】准备重新尝试.................");
             reUpdate(step);
         } else {
             reCount = 2;
@@ -90,6 +101,7 @@ public class StepTask {
 
     /**
      * 状态码是否为200
+     *
      * @param jsonObject json结果
      * @return 是否
      */
@@ -99,9 +111,10 @@ public class StepTask {
 
     /**
      * 更新步数
+     *
      * @param accessToken token
-     * @param userId 用户id
-     * @param step 步数
+     * @param userId      用户id
+     * @param step        步数
      * @return 更新结果 如：{"msg":"成功","code":200,"data":{"pedometerRecordHourlyList":[{"distance":"0,0,0,0,0,0,0,17925.00,0,0,18723.00,19206.00,10673.00,11704.00,0,11737.00,0,0,0,0,0,0,0,0","created":"2020-09-18 07:44:23","measurementTime":"2020-09-18 00:00:00","active":0,"step":"0,0,0,0,0,0,0,29876,0,0,31205,32010,32020,35112,0,35212,0,0,0,0,0,0,0,0","id":"1822cd8ababb4174be5a89c68bfab39f","calories":"0,0,0,0,0,0,0,746.00,0,0,780.00,800.00,8005.00,8778.00,0,8803.00,0,0,0,0,0,0,0,0","userId":27231098,"deviceId":"M_NULL","dataSource":2,"updated":1600412486817}]}}
      */
     private String update(String accessToken, String userId, int step) {
@@ -123,6 +136,7 @@ public class StepTask {
 
     /**
      * 登录
+     *
      * @return 结果
      */
     private String login() {
@@ -141,13 +155,14 @@ public class StepTask {
         FileWriter fw = null;
         BufferedWriter bw = null;
         try {
-            fw = new FileWriter(new File(TEMP_FILE_PATH));
+            fw = new FileWriter(new File(tokenFilePath));
             //写入中文字符时会出现乱码
             bw = new BufferedWriter(fw);
             //BufferedWriter  bw=new BufferedWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File("temp.txt")), "UTF-8")));
-            bw.write(accessToken + "\r\n");
+            bw.write(accessToken + System.getProperty("line.separator"));
             bw.write(userId);
-        } catch (IOException e) {
+        } catch (Exception e) {
+            log.info("==============【写入token失败】=========,{}", e.toString());
             e.printStackTrace();
         } finally {
             try {
@@ -169,33 +184,26 @@ public class StepTask {
         BufferedReader br = null;
         Map<String, String> resultMap = new HashMap<>();
         try {
-            fr = new FileReader(TEMP_FILE_PATH);
+            fr = new FileReader(tokenFilePath);
             br = new BufferedReader(fr);
             resultMap.put("accessToken", br.readLine());
             resultMap.put("userId", br.readLine());
-        } catch (IOException e) {
+        } catch (Exception e) {
+            log.info("==============【读取token失败】=========,{}", e.toString());
             e.printStackTrace();
         } finally {
-            try {
-                assert br != null;
-                br.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            try {
-                fr.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            closeResource(br);
+            closeResource(fr);
         }
         return resultMap;
     }
 
     /**
      * post请求
+     *
      * @param httpUrl httpUrl
-     * @param param param
-     * @param header header
+     * @param param   param
+     * @param header  header
      * @return 结果
      */
     private String doPost(String httpUrl, String param, Map<String, String> header) {
@@ -250,32 +258,42 @@ public class StepTask {
             e.printStackTrace();
         } finally {
             // 关闭资源
-            if (null != br) {
-                try {
-                    br.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (null != os) {
-                try {
-                    os.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (null != is) {
-                try {
-                    is.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+            closeResource(br);
+            closeResource(os);
+            closeResource(is);
             // 断开与远程地址url的连接
             if (connection != null) {
                 connection.disconnect();
             }
         }
         return result;
+    }
+
+    private void closeResource(Reader r) {
+        if (null != r) {
+            try {
+                r.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    private void closeResource(OutputStream r) {
+        if (null != r) {
+            try {
+                r.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    private void closeResource(InputStream r) {
+        if (null != r) {
+            try {
+                r.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
