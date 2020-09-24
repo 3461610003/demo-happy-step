@@ -42,7 +42,7 @@ public class StepTask {
     @Scheduled(cron = "0 0/30 8-20 * * ?")
 //    @Scheduled(cron = "0 * 13 * * ?")
     public void task() throws InterruptedException {
-        int nextInt = 0;
+        int nextInt = new Random().nextInt(10);
         log.info("【准备同步步数】等待{}分钟------------------------------------", nextInt);
         Thread.sleep(1000 * 60 * nextInt);
         int step = getStep();
