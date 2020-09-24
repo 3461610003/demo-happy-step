@@ -1,6 +1,8 @@
 package com.example.demo.happy.step.task;
 
 import com.alibaba.fastjson.JSONObject;
+import com.example.demo.happy.step.utils.ResourceUtil;
+import com.example.demo.happy.step.utils.ZipUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -47,13 +49,13 @@ public class StepTask {
         Thread.sleep(1000 * 60 * nextInt);
         int step = getStep();
         Map<String, String> tokenMap = readToken();
-        if (tokenMap == null || tokenMap.size() < 2 || isBlank(tokenMap.get("accessToken")) || isBlank(tokenMap.get("userId"))) {
+        if (tokenMap == null || tokenMap.size() < 2 || isNull(tokenMap.get("accessToken")) || isNull(tokenMap.get("userId"))) {
             reUpdate(step);
             return;
         }
         JSONObject updateJson = JSONObject.parseObject(update(tokenMap.get("accessToken"), tokenMap.get("userId"), step));
         if (isSuccess(updateJson)) {
-            log.info("==============【同步步数成功】");
+            log.info("==============【同步步数成功】 步数={}", step);
         } else {
             log.info("==============【同步步数失败】\n尝试重新登录并同步。。。。。");
             reUpdate(step);
@@ -72,6 +74,10 @@ public class StepTask {
         return str == null || str.trim().length() == 0;
     }
 
+    private boolean isNull(String str) {
+        return isBlank(str) || str.trim().toLowerCase().equals("null");
+    }
+
     private void reUpdate(int step) {
         JSONObject loginJson = JSONObject.parseObject(login());
         if (isSuccess(loginJson)) {
@@ -83,7 +89,7 @@ public class StepTask {
             log.info("【登录成功】写入：accessToken={}, userId={}", accessToken, userId);
             JSONObject updateJson = JSONObject.parseObject(update(accessToken, userId, step));
             if (isSuccess(updateJson)) {
-                log.info("==============【同步步数成功】result={}", updateJson);
+                log.info("==============【同步步数成功】 步数={}", step);
                 return;
             } else {
                 log.info("==============【同步步数失败】result={}", updateJson);
@@ -152,48 +158,31 @@ public class StepTask {
     }
 
     public void writeToken(String accessToken, String userId) {
-        FileWriter fw = null;
-        BufferedWriter bw = null;
-        try {
-            fw = new FileWriter(new File(tokenFilePath));
-            //写入中文字符时会出现乱码
-            bw = new BufferedWriter(fw);
-            //BufferedWriter  bw=new BufferedWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File("temp.txt")), "UTF-8")));
-            bw.write(accessToken + System.getProperty("line.separator"));
-            bw.write(userId);
+        try (FileWriter fw = new FileWriter(new File(tokenFilePath));
+             //写入中文字符时会出现乱码
+             BufferedWriter bw = new BufferedWriter(fw);
+        ) {
+            //BufferedWriter bw=new BufferedWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File("temp.txt")), "UTF-8")));
+            String accessTokenZip = ZipUtil.compress(accessToken);
+            bw.write(accessTokenZip == null ? "" : accessTokenZip + System.getProperty("line.separator"));
+            String userIdZip = ZipUtil.compress(userId);
+            bw.write(userIdZip == null ? "" : userIdZip);
         } catch (Exception e) {
             log.info("==============【写入token失败】=========,{}", e.toString());
             e.printStackTrace();
-        } finally {
-            try {
-                assert bw != null;
-                bw.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            try {
-                fw.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
     }
 
     public Map<String, String> readToken() {
-        FileReader fr = null;
-        BufferedReader br = null;
         Map<String, String> resultMap = new HashMap<>();
-        try {
-            fr = new FileReader(tokenFilePath);
-            br = new BufferedReader(fr);
-            resultMap.put("accessToken", br.readLine());
-            resultMap.put("userId", br.readLine());
+        try (FileReader fr = new FileReader(tokenFilePath);
+             BufferedReader br = new BufferedReader(fr);
+        ) {
+            resultMap.put("accessToken", ZipUtil.uncompress(br.readLine()));
+            resultMap.put("userId", ZipUtil.uncompress(br.readLine()));
         } catch (Exception e) {
             log.info("==============【读取token失败】=========,{}", e.toString());
             e.printStackTrace();
-        } finally {
-            closeResource(br);
-            closeResource(fr);
         }
         return resultMap;
     }
@@ -229,8 +218,6 @@ public class StepTask {
             connection.setDoInput(true);
             // 设置传入参数的格式:请求参数应该是 name1=value1&name2=value2 的形式。
 //            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            // 设置鉴权信息：Authorization: Bearer da3efcbf-0845-4fe3-8aba-ee040be542c0
-//            connection.setRequestProperty("Authorization", "Bearer da3efcbf-0845-4fe3-8aba-ee040be542c0");
             if (header != null && header.size() > 0) {
                 for (String key : header.keySet()) {
                     connection.setRequestProperty(key, header.get(key));
@@ -246,7 +233,7 @@ public class StepTask {
                 // 对输入流对象进行包装:charset根据工作项目组的要求来设置
                 br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
                 StringBuilder sbf = new StringBuilder();
-                String temp = null;
+                String temp;
                 // 循环遍历一行一行读取数据
                 while ((temp = br.readLine()) != null) {
                     sbf.append(temp);
@@ -258,42 +245,14 @@ public class StepTask {
             e.printStackTrace();
         } finally {
             // 关闭资源
-            closeResource(br);
-            closeResource(os);
-            closeResource(is);
+            ResourceUtil.closeResource(br);
+            ResourceUtil.closeResource(os);
+            ResourceUtil.closeResource(is);
             // 断开与远程地址url的连接
             if (connection != null) {
                 connection.disconnect();
             }
         }
         return result;
-    }
-
-    private void closeResource(Reader r) {
-        if (null != r) {
-            try {
-                r.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-    private void closeResource(OutputStream r) {
-        if (null != r) {
-            try {
-                r.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-    private void closeResource(InputStream r) {
-        if (null != r) {
-            try {
-                r.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
     }
 }
