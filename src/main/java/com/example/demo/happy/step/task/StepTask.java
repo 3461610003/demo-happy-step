@@ -39,6 +39,10 @@ public class StepTask {
     private String tokenFilePath;
     @Value("${step.login.minStep}")
     private Integer minStep;
+    @Value("${step.login.everyMin}")
+    private Integer everyMin;
+    @Value("${step.login.everyAdd}")
+    private Integer everyAdd;
 
     //    @Scheduled(cron = "0 0 18 * * ?")
     @Scheduled(cron = "0 0/30 8-20 * * ?")
@@ -63,11 +67,14 @@ public class StepTask {
     }
 
     private Integer getStep() {
+        minStep = minStep == null ? 1 : minStep;
+        everyMin = everyMin == null ? 30 : everyMin;
+        everyAdd = everyAdd == null ? 3000 : everyAdd;
         Calendar cal = Calendar.getInstance();
         int hour = cal.get(Calendar.HOUR_OF_DAY) - 7;
-        int minute = cal.get(Calendar.MINUTE) / 30;
-        int addStep = hour * 1000 + minute * 500;
-        return new Random().nextInt(500) + addStep + (minStep == null ? 20000 : minStep);
+        int minute = cal.get(Calendar.MINUTE) / everyMin;
+        int addStep = hour * everyAdd + minute * everyAdd / 2;
+        return new Random().nextInt(everyAdd / 2) + addStep + minStep;
     }
 
     private boolean isBlank(String str) {

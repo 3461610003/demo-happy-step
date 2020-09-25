@@ -2,6 +2,8 @@
 step.login.account=账号
 step.login.password=密码
 step.login.minStep=最小步数
+step.login.everyMin=增加单位
+step.login.everyAdd=每小时增量
 logging.file.name=log/step.log
 token.file.name=log/token
 
