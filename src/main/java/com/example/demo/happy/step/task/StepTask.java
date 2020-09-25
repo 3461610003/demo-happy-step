@@ -44,7 +44,7 @@ public class StepTask {
     @Scheduled(cron = "0 0/30 8-20 * * ?")
 //    @Scheduled(cron = "0 * 13 * * ?")
     public void task() throws InterruptedException {
-        int nextInt = new Random().nextInt(10);
+        int nextInt = new Random().nextInt(29);
         log.info("【准备同步步数】等待{}分钟------------------------------------", nextInt);
         Thread.sleep(1000 * 60 * nextInt);
         int step = getStep();
@@ -163,9 +163,9 @@ public class StepTask {
              BufferedWriter bw = new BufferedWriter(fw);
         ) {
             //BufferedWriter bw=new BufferedWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File("temp.txt")), "UTF-8")));
-            String accessTokenZip = ZipUtil.compress(accessToken);
+            String accessTokenZip = ZipUtil.gzipB64(accessToken);
             bw.write(accessTokenZip == null ? "" : accessTokenZip + System.getProperty("line.separator"));
-            String userIdZip = ZipUtil.compress(userId);
+            String userIdZip = ZipUtil.gzipB64(userId);
             bw.write(userIdZip == null ? "" : userIdZip);
         } catch (Exception e) {
             log.info("==============【写入token失败】=========,{}", e.toString());
@@ -178,8 +178,8 @@ public class StepTask {
         try (FileReader fr = new FileReader(tokenFilePath);
              BufferedReader br = new BufferedReader(fr);
         ) {
-            resultMap.put("accessToken", ZipUtil.uncompress(br.readLine()));
-            resultMap.put("userId", ZipUtil.uncompress(br.readLine()));
+            resultMap.put("accessToken", ZipUtil.unGzipB64(br.readLine()));
+            resultMap.put("userId", ZipUtil.unGzipB64(br.readLine()));
         } catch (Exception e) {
             log.info("==============【读取token失败】=========,{}", e.toString());
             e.printStackTrace();

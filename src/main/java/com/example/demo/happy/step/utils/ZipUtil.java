@@ -171,7 +171,7 @@ public class ZipUtil {
     }
 
     /**
-     * gzip压缩
+     * gzip压缩, 压缩转码后有换行
      */
     public static String compress(String primStr) {
         if (StringUtils.isEmpty(primStr)) {
