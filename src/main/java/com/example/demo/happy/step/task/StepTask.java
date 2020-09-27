@@ -6,7 +6,6 @@ import com.example.demo.happy.step.utils.ZipUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.DigestUtils;
@@ -29,7 +28,7 @@ import java.util.*;
 @Configuration
 @EnableScheduling
 @Slf4j
-@PropertySource(value = "classpath:/application.properties")
+//@PropertySource(value = "classpath:/application.properties")
 public class StepTask {
     private static int reCount = 2;
 
