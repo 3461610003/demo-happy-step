@@ -6,6 +6,7 @@ import com.example.demo.happy.step.utils.ZipUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.DigestUtils;
@@ -28,6 +29,7 @@ import java.util.*;
 @Configuration
 @EnableScheduling
 @Slf4j
+@PropertySource(value = "classpath:/application.properties")
 public class StepTask {
     private static int reCount = 2;
 
@@ -39,16 +41,19 @@ public class StepTask {
     private String tokenFilePath;
     @Value("${step.login.minStep}")
     private Integer minStep;
+    @Value("${step.wait.minute}")
+    private Integer waitMinute;
     @Value("${step.login.everyMin}")
     private Integer everyMin;
     @Value("${step.login.everyAdd}")
     private Integer everyAdd;
 
     //    @Scheduled(cron = "0 0 18 * * ?")
-    @Scheduled(cron = "0 0/30 8-20 * * ?")
+//    @Scheduled(cron = "0 0/30 8-20 * * ?")
+    @Scheduled(cron = "${step.schedule.cron}")
 //    @Scheduled(cron = "0 * 13 * * ?")
     public void task() throws InterruptedException {
-        int nextInt = new Random().nextInt(29);
+        int nextInt = new Random().nextInt(waitMinute);
         log.info("【准备同步步数】等待{}分钟------------------------------------", nextInt);
         Thread.sleep(1000 * 60 * nextInt);
         int step = getStep();
